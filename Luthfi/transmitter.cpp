@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
     {
         printf("Error: could not create socket");
     }
-    
+
     // initializes object server attributes
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = inet_addr(hostname);
@@ -111,10 +111,10 @@ int main(int argc, char *argv[])
 			frame[2] = STX;
 			if (str_to_send[0] != '\n') { // mencegah karakter newline untuk ditransmisikan
 				strcat(text, str_to_send);
-				
-				
+
+
 				counter++;
-				
+
 				unsigned short ichks = calc_crc16(text, strlen(text));
 				printf("Mengirim byte ke-%d: '%s'\n", counter, text);
 				strcat(frame, text);
@@ -125,15 +125,15 @@ int main(int argc, char *argv[])
 				strcat(frame, etx);
 				strcat(frame, chks);
 				printf("Mengirim frame '%s'\n", frame);
-				
+
 				strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
 				printf("Copied frame '%s'\n", listframe[fnum]);
-				
+
 				sendto(socket_desc, frame, strlen(frame), 0, (struct sockaddr *)&server, sizeof(server));
 
 				// reset string
 				memset(str_to_send, 0, sizeof(str_to_send));
-				
+
 			}
 			memset(text, 0, sizeof text);
 			memset(frame, 0, sizeof frame);
@@ -161,15 +161,14 @@ int main(int argc, char *argv[])
 	strcat(frame, etx);
 	strcat(frame, chks);
 	printf("Mengirim frame '%s'\n", frame);
-	
+
 	strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
 	printf("Copied frame '%s'\n", listframe[fnum]);
-				
 	sendto(socket_desc, frame, strlen(frame), 0, (struct sockaddr *)&server, sizeof(server));
 
 	str_to_send[0] = Endfile;
 	sendto(socket_desc, str_to_send, strlen(str_to_send), 0, (struct sockaddr *)&server, sizeof(server));
-	
+
 	isMainUp = 0;
 
 	printf("Reached end of file\n");
@@ -186,20 +185,27 @@ void *XON_XOFF_HANDLER(void *args) {
 
 	int rf;
 	int server_len = sizeof(server);
-	Byte recv_str[1];
+	char frame[1 + 1 + 2] = "";
 
 	while (true) {
 		// menunggu signal XON/XOFF
-		rf = recvfrom(socket_desc, recv_str, 1, 0, (struct sockaddr *)&server, (socklen_t*)&server_len);
+		rf = recvfrom(socket_desc, frame, 4, 0, (struct sockaddr *)&server, (socklen_t*)&server_len);
 
 		if (rf < 0) {
 			perror ("Error: failed receiving XON/XOFF from socket");
 			exit(1);
 		}
 		// XON or XOFF
-		lastByteReceived = recv_str[0];
+		if(frame[0] == NAK)
+		{
+			printf("NAK\n");
+		}
+		else
+		{
+			printf("ENQ\n");
+		}
 		// reset
-		memset(recv_str, 0, sizeof(recv_str));
+		memset(frame, 0, sizeof(frame));
 	}
 
 	printf("Exit - XON/XOFF handler");

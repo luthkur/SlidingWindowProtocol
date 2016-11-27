@@ -94,7 +94,7 @@ void sendNAK(int frameNum, int udpSocket) {
 void sendENQ(int frameNum, int udpSocket) {
 	char frame[1 + 1 + 2] = "";
 	char chks[3];
-	frame[0] = NAK;
+	frame[0] = ENQ;
 	frame[1] = frameNum;
 	unsigned short ichks = calc_crc16(frame, strlen(frame));
 	chks[0] = ichks & 0xff;
