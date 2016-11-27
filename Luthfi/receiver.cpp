@@ -41,7 +41,7 @@ bool checkSum (char* frame) {
 	unsigned short ichks = calc_crc16(text, strlen(text));
 	chks[0] = ichks & 0xff;
 	chks[1] = (ichks >> 8) & 0xff;
-	printf("Checksum : should be %d-%d ; get %d-%d\n", (int) chks[0], (int) chks[1], frame[getEtx(frame)+1], frame[getEtx(frame)+2]);
+	printf("Checksum: should be %d-%d ; get %d-%d\n", (int) chks[0], (int) chks[1], frame[getEtx(frame)+1], frame[getEtx(frame)+2]);
 	if ((frame[getEtx(frame)+1] != chks[0]) || (frame[getEtx(frame)+2] != chks[1])) {
 		return false;
 	} else {
@@ -95,7 +95,7 @@ void sendNAK(int frameNum, int udpSocket) {
 	chks[1] = (ichks >> 8) & 0xff;
 	chks[2] = 0;
 	strcat(frame, chks);
-	printf("NAK %d\n", frameNum);
+	printf("Send NAK %d\n", frameNum);
 	sendto(udpSocket, frame, strlen(frame), 0, (struct sockaddr *)&sclient,sizeof(sclient));
 }
 
@@ -109,7 +109,7 @@ void sendENQ(int frameNum, int udpSocket) {
 	chks[1] = (ichks >> 8) & 0xff;
 	chks[2] = 0;
 	strcat(frame, chks);
-	printf("ENQ %d\n", frameNum);
+	printf("Send ACK %d\n", frameNum);
 	sendto(udpSocket, frame, strlen(frame), 0, (struct sockaddr *)&sclient,sizeof(sclient));
 }
 
@@ -271,6 +271,8 @@ static void* consume(void *queue){
 //	QTYPE *rcvq_ptr = (QTYPE *)queue;
 
 //	int i=1; //consume counter
+	int offset = 0;
+	
 	while (true) {
 		if (listfbool[headWin]) {
 			char text[VARLEN];
@@ -278,11 +280,15 @@ static void* consume(void *queue){
 			for (int i = 3;i < getEtx(listframe[headWin]);i++) {
 				text[i-3] = listframe[headWin][i];
 			}
-			printf("Mengkonsumsi frame ke-%d : '%s'\n", headWin, text);
+			printf("Mengkonsumsi frame ke-%d : '%s'\n", headWin + offset, text);
 			
 			listfbool[headWin] = false; // <-- consumed and reset
 			headWin++;
-		}
+			if (headWin >= LISTSZ) {
+				headWin = 1;
+				offset += LISTSZ-1;
+			}
+		}		
 		/*
 		Byte *res, *dummy;
 		res = q_get(rcvq_ptr, dummy);
