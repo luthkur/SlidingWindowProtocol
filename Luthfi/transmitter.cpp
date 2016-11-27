@@ -196,9 +196,12 @@ void *XON_XOFF_HANDLER(void *args) {
 			exit(1);
 		}
 		// XON or XOFF
+		int fnum = (int)frame[1];
 		if(frame[0] == NAK)
 		{
 			printf("NAK\n");
+			printf("Resend frame '%s'\n", listframe[fnum]);
+			sendto(socket_desc, listframe[fnum], strlen(listframe[fnum]), 0, (struct sockaddr *)&server, sizeof(server));
 		}
 		else
 		{
