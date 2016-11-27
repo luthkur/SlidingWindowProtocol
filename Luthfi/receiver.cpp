@@ -49,6 +49,14 @@ bool checkSum (char* frame) {
 	}
 }
 
+/** WINDOW THING **/
+#define LISTSZ 100
+#define WINSIZE 5
+
+char listframe[LISTSZ][1 + 1 + 1 + VARLEN + 1 + 2];
+bool listfbool[LISTSZ];
+int headWin = 1;
+
 /* Delay to adjust speed of consuming buffer, in milliseconds */
 #define DELAY 600000
 
@@ -159,14 +167,7 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
-		else {
-				if (!c) {
-					j = 1;
-				} else {
-					j++;
-			}
-			printf("Menerima byte ke-%d.\n", j);
-		}
+		
 	}
 
 	if(pthread_join(consume_thread,NULL)){
@@ -181,6 +182,7 @@ static Byte *rcvchar(int sockfd, QTYPE *queue)
 	Read a character from socket and put it to the receive buffer. If the number of characters in the
 	* receive buffer is above certain level, then send XOFF and set a flag
 	*/
+	/*
 	if ((queue->count >= UPPERLIMIT)&&(!send_xoff)) { //buffer full
 		sent_xonxoff = XOFF;
 		send_xon = false;
@@ -196,17 +198,27 @@ static Byte *rcvchar(int sockfd, QTYPE *queue)
 			puts("XOFF gagal dikirim");
 		}
 	}
-
+	*/
+	
 	// read char from socket (receive)
 	if (recvfrom(sockfd, frame, RXQSIZE, 0, (struct sockaddr *)&sclient, &cli_len) < 0)
 		puts("Receive byte failed");
 
-	sendENQ(frame[1],sockfd);
-	sendNAK(frame[1],sockfd);
-	printf("what we got %s, framenum %d, checksum %c%c\n", frame, (int)frame[1], frame[getEtx(frame)+1], frame[getEtx(frame)+2]);
-	printf(">>>>>> Checksum result is %d\n", checkSum(frame));
+	printf("From transmitter: %s, framenum %d, checksum %c%c\n", frame, (int)frame[1], frame[getEtx(frame)+1], frame[getEtx(frame)+2]);
+	
+	if (checkSum(frame)) {
+		printf("Checksum pass, file OK!\n");
+		sendENQ(frame[1],sockfd);
+		int fnum = (int)frame[1];
+		strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
+		listfbool[fnum] = true;
+	}
+	else {
+		printf("Checksum failed, file corrupted!\n");
+		sendNAK(frame[1],sockfd);
+	}
 	// check end of file
-	if(frame[0] == Endfile) {
+	if(frame[3] == Endfile) {
 		puts("Received end of file");
 		end = true;
 		return queue->data;
@@ -224,14 +236,14 @@ static Byte *rcvchar(int sockfd, QTYPE *queue)
 	return queue->data;
 	}
 }
-
+/*
 static Byte *q_get(QTYPE *queue, Byte *data)
 {
 	Byte *current;
-	/* Nothing in the queue */
+	// Nothing in the queue 
 	if (!queue->count) return (NULL);
 
-	/** send XON **/
+	// send XON
 	if ((queue->count <= LOWERLIMIT) && (!send_xon)){
 		sent_xonxoff = XON;
 		send_xon = true;
@@ -253,13 +265,25 @@ static Byte *q_get(QTYPE *queue, Byte *data)
 
 	return current;
 }
-
+*/
 static void* consume(void *queue){
 
-	QTYPE *rcvq_ptr = (QTYPE *)queue;
+//	QTYPE *rcvq_ptr = (QTYPE *)queue;
 
-	int i=1; //consume counter
+//	int i=1; //consume counter
 	while (true) {
+		if (listfbool[headWin]) {
+			char text[VARLEN];
+			memset(text, 0, sizeof text);
+			for (int i = 3;i < getEtx(listframe[headWin]);i++) {
+				text[i-3] = listframe[headWin][i];
+			}
+			printf("Mengkonsumsi frame ke-%d : '%s'\n", headWin, text);
+			
+			listfbool[headWin] = false; // <-- consumed and reset
+			headWin++;
+		}
+		/*
 		Byte *res, *dummy;
 		res = q_get(rcvq_ptr, dummy);
 		if(res){
@@ -271,7 +295,9 @@ static void* consume(void *queue){
 			childead = true;
 			pthread_exit(0);
 		}
-		//usleep(DELAY); //delay
+		
+		* */
+		//usleep(DELAY/100); //delay
 	}
 	pthread_exit(0);
 }
