@@ -29,8 +29,9 @@ int  append(char*s, size_t size, char c) {
 #define LISTSZ 100
 #define WINSIZE 5
 
-char listframe[100][1 + 1 + 1 + VARLEN + 1 + 2];
-int head = 0;
+char listframe[LISTSZ][1 + 1 + 1 + VARLEN + 1 + 2];
+bool listfbool[LISTSZ];
+int headWin = 1;
 
 /** GLOBAL VARIABLES **/
 char lastByteReceived = XON;
@@ -116,20 +117,18 @@ int main(int argc, char *argv[])
 				counter++;
 
 				unsigned short ichks = calc_crc16(text, strlen(text));
-				printf("Mengirim byte ke-%d: '%s'\n", counter, text);
+				printf("byte ke-%d: '%s'\n", counter, text);
 				strcat(frame, text);
 				chks[0] = ichks & 0xff;
 				chks[1] = (ichks >> 8) & 0xff;
 				chks[2] = 0;
-				printf("Mengirim checksum '%s' from '%d'\n", chks, ichks);
+				printf("checksum '%s' from '%d'\n", chks, ichks);
 				strcat(frame, etx);
 				strcat(frame, chks);
-				printf("Mengirim frame '%s'\n", frame);
+				printf("frame '%s'\n", frame);
 
 				strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
 				printf("Copied frame '%s'\n", listframe[fnum]);
-
-				sendto(socket_desc, frame, strlen(frame), 0, (struct sockaddr *)&server, sizeof(server));
 
 				// reset string
 				memset(str_to_send, 0, sizeof(str_to_send));
@@ -152,19 +151,38 @@ int main(int argc, char *argv[])
 	frame[1] = (char) fnum;
 	frame[2] = STX;
 	unsigned short ichks = calc_crc16(text, strlen(text));
-	printf("Mengirim byte ke-%d: '%s'\n", counter, text);
+	printf("byte ke-%d: '%s'\n", counter, text);
 	strcat(frame, text);
 	chks[0] = ichks & 0xff;
 	chks[1] = (ichks >> 8) & 0xff;
 	chks[2] = 0;
-	printf("Mengirim checksum '%s' from '%d'\n", chks, ichks);
+	printf("checksum '%s' from '%d'\n", chks, ichks);
 	strcat(frame, etx);
 	strcat(frame, chks);
-	printf("Mengirim frame '%s'\n", frame);
+	printf("frame '%s'\n", frame);
 
 	strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
 	printf("Copied frame '%s'\n", listframe[fnum]);
-	sendto(socket_desc, frame, strlen(frame), 0, (struct sockaddr *)&server, sizeof(server));
+	
+	int cnt = 1;
+	int timer = 1;
+	bool timeout;
+	while (headWin < fnum) {
+		if ((cnt < headWin + WINSIZE)&&(cnt <= fnum)) {
+			printf("Send frame-%d\n", cnt);
+			sendto(socket_desc, listframe[cnt], strlen(listframe[cnt]), 0, (struct sockaddr *)&server, sizeof(server));
+			cnt++;
+		}
+		else {
+			printf("Waiting ACK\n");
+			if (timer > 10) {
+				
+			}
+			usleep(1);
+			timer++;
+			
+		}
+	}
 
 	str_to_send[0] = Endfile;
 	sendto(socket_desc, str_to_send, strlen(str_to_send), 0, (struct sockaddr *)&server, sizeof(server));
@@ -192,21 +210,29 @@ void *XON_XOFF_HANDLER(void *args) {
 		rf = recvfrom(socket_desc, frame, 4, 0, (struct sockaddr *)&server, (socklen_t*)&server_len);
 
 		if (rf < 0) {
-			perror ("Error: failed receiving XON/XOFF from socket");
+			perror ("Error: failed receiving ACK/NAK from socket");
 			exit(1);
 		}
-		// XON or XOFF
-		int fnum = (int)frame[1];
+		
+		int fidx = (int)frame[1];
 		if(frame[0] == NAK)
 		{
-			printf("NAK\n");
-			printf("Resend frame '%s'\n", listframe[fnum]);
-			sendto(socket_desc, listframe[fnum], strlen(listframe[fnum]), 0, (struct sockaddr *)&server, sizeof(server));
+			printf("NAK %d received\n", fidx);
+			printf("Resend frame '%s'\n", listframe[fidx]);
+			sendto(socket_desc, listframe[fidx], strlen(listframe[fidx]), 0, (struct sockaddr *)&server, sizeof(server));
 		}
 		else
 		{
-			printf("ENQ\n");
+			printf("ACK %d received\n", fidx);
+			listfbool[fidx] = true;
+			while(listfbool[headWin]) {
+				headWin++;
+				if (headWin >= LISTSZ) {
+					//do something
+				}
+			}
 		}
+		
 		// reset
 		memset(frame, 0, sizeof(frame));
 	}
