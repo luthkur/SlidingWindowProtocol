@@ -25,6 +25,13 @@ int  append(char*s, size_t size, char c) {
 #define SIZECHAR 5
 #define VARLEN 6
 
+/** WINDOW THING **/
+#define LISTSZ 100
+#define WINSIZE 5
+
+char listframe[100][1 + 1 + 1 + VARLEN + 1 + 2];
+int head = 0;
+
 /** GLOBAL VARIABLES **/
 char lastByteReceived = XON;
 int socket_desc;
@@ -104,53 +111,29 @@ int main(int argc, char *argv[])
 			frame[2] = STX;
 			if (str_to_send[0] != '\n') { // mencegah karakter newline untuk ditransmisikan
 				strcat(text, str_to_send);
-				/** XOFF, transmisi dipause **/
-				if (lastByteReceived == XOFF) {
-					printf("XOFF diterima.\n");
-
-					// waiting for XON
-					while (lastByteReceived == XOFF) {
-						printf("Menunggu XON...\n");
-						usleep(100000);
-					}
-					counter++;
-					
-					unsigned short ichks = calc_crc16(text, strlen(text));
-					printf("Mengirim byte ke-%d: '%s'\n", counter, text);
-					strcat(frame, text);
-					chks[0] = ichks & 0xff;
-					chks[1] = (ichks >> 8) & 0xff;
-					chks[2] = 0;
-					printf("Mengirim checksum '%s' from '%d'\n", chks, ichks);
-					strcat(frame, etx);
-					strcat(frame, chks);
-					printf("Mengirim frame '%s'\n", frame);
-					sendto(socket_desc, frame, strlen(frame), 0, (struct sockaddr *)&server, sizeof(server));
-					
-					printf("XON diterima.\n");
 				
-				/** XON, transmisi berjalan **/
-				} else {
-					
-					usleep(10000);
-					// sending bytes (one character)
-					counter++;
-					
-					unsigned short ichks = calc_crc16(text, strlen(text));
-					printf("Mengirim byte ke-%d: '%s'\n", counter, text);
-					strcat(frame, text);
-					chks[0] = ichks & 0xff;
-					chks[1] = (ichks >> 8) & 0xff;
-					chks[2] = 0;
-					printf("Mengirim checksum '%s' from '%d'\n", chks, ichks);
-					strcat(frame, etx);
-					strcat(frame, chks);
-					printf("Mengirim frame '%s'\n", frame);
-					sendto(socket_desc, frame, strlen(frame), 0, (struct sockaddr *)&server, sizeof(server));
+				
+				counter++;
+				
+				unsigned short ichks = calc_crc16(text, strlen(text));
+				printf("Mengirim byte ke-%d: '%s'\n", counter, text);
+				strcat(frame, text);
+				chks[0] = ichks & 0xff;
+				chks[1] = (ichks >> 8) & 0xff;
+				chks[2] = 0;
+				printf("Mengirim checksum '%s' from '%d'\n", chks, ichks);
+				strcat(frame, etx);
+				strcat(frame, chks);
+				printf("Mengirim frame '%s'\n", frame);
+				
+				strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
+				printf("Copied frame '%s'\n", listframe[fnum]);
+				
+				sendto(socket_desc, frame, strlen(frame), 0, (struct sockaddr *)&server, sizeof(server));
 
-					// reset string
-					memset(str_to_send, 0, sizeof(str_to_send));
-				}
+				// reset string
+				memset(str_to_send, 0, sizeof(str_to_send));
+				
 			}
 			memset(text, 0, sizeof text);
 			memset(frame, 0, sizeof frame);
@@ -178,6 +161,10 @@ int main(int argc, char *argv[])
 	strcat(frame, etx);
 	strcat(frame, chks);
 	printf("Mengirim frame '%s'\n", frame);
+	
+	strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
+	printf("Copied frame '%s'\n", listframe[fnum]);
+				
 	sendto(socket_desc, frame, strlen(frame), 0, (struct sockaddr *)&server, sizeof(server));
 
 	str_to_send[0] = Endfile;
