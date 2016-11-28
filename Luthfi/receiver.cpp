@@ -20,7 +20,7 @@
 #define LOWERLIMIT 3
 
 /** FRAME THING **/
-#define VARLEN 6
+#define VARLEN 16
 char frame[1 + 1 + 1 + VARLEN + 1 + 2] = "";
 
 int getEtx (char* frame) {
@@ -32,12 +32,13 @@ int getEtx (char* frame) {
 }
 
 bool checkSum (char* frame) {
-	char text[VARLEN];
+	char text[4 + VARLEN];
 	memset(text, 0, sizeof text);
 	char chks[2];
-	for (int i = 3;i < getEtx(frame);i++) {
-		text[i-3] = frame[i];
+	for (int i = 0;i < getEtx(frame);i++) {
+		text[i] = frame[i];
 	}
+	printf("Getting checksum for %s\n", text);
 	unsigned short ichks = calc_crc16(text, strlen(text));
 	chks[0] = ichks & 0xff;
 	chks[1] = (ichks >> 8) & 0xff;
@@ -50,7 +51,7 @@ bool checkSum (char* frame) {
 }
 
 /** WINDOW THING **/
-#define LISTSZ 100
+#define LISTSZ 256
 #define WINSIZE 5
 
 char listframe[LISTSZ][1 + 1 + 1 + VARLEN + 1 + 2];
@@ -201,21 +202,22 @@ static Byte *rcvchar(int sockfd, QTYPE *queue)
 	*/
 	
 	// read char from socket (receive)
-	if (recvfrom(sockfd, frame, RXQSIZE, 0, (struct sockaddr *)&sclient, &cli_len) < 0)
+	if (recvfrom(sockfd, frame, RXQSIZE, 0, (struct sockaddr *)&sclient, &cli_len) < 0) {
 		puts("Receive byte failed");
-
-	printf("From transmitter: %s, framenum %d, checksum %c%c\n", frame, (int)frame[1], frame[getEtx(frame)+1], frame[getEtx(frame)+2]);
-	
-	if (checkSum(frame)) {
-		printf("Checksum pass, file OK!\n");
-		sendENQ(frame[1],sockfd);
-		int fnum = (int)frame[1];
-		strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
-		listfbool[fnum] = true;
-	}
-	else {
-		printf("Checksum failed, file corrupted!\n");
-		sendNAK(frame[1],sockfd);
+	} else {
+		printf("From transmitter: %s, framenum %d, checksum %c%c\n", frame, (int)frame[1], frame[getEtx(frame)+1], frame[getEtx(frame)+2]);
+		
+		if (checkSum(frame) == true) {
+			printf("Checksum pass, file OK!\n");
+			sendENQ(frame[1],sockfd);
+			int fnum = (int)frame[1];
+			strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
+			listfbool[fnum] = true;
+		}
+		else {
+			printf("Checksum failed, file corrupted!\n");
+			sendNAK(frame[1],sockfd);
+		}
 	}
 	// check end of file
 	if(frame[3] == Endfile) {

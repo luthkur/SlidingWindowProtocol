@@ -13,20 +13,10 @@
 #include "crc16.h"
 
 /** FRAME THING **/
-int  append(char*s, size_t size, char c) {
-     if(strlen(s) + 1 >= size) {
-          return 1;
-     }
-     int len = strlen(s);
-     s[len] = c;
-     s[len+1] = '\0';
-     return 0;
-}
-#define SIZECHAR 5
-#define VARLEN 6
+#define VARLEN 16
 
 /** WINDOW THING **/
-#define LISTSZ 100
+#define LISTSZ 256
 #define WINSIZE 5
 
 char listframe[LISTSZ][1 + 1 + 1 + VARLEN + 1 + 2];
@@ -102,7 +92,7 @@ int main(int argc, char *argv[])
 	// msg_len is 2 so that it only reads one character
 	int counter = 0, fnum = 1;
 	char frame[1 + 1 + 1 + VARLEN + 1 + 2] = "";
-	char text[VARLEN] = "";
+	char text[VARLEN+1] = "";
 	char chks[3];
 	char etx[2]; etx[0] = ETX; etx[1] = 0;
 	while (fgets(str_to_send, msg_len, file) != NULL) {
@@ -112,13 +102,12 @@ int main(int argc, char *argv[])
 			frame[2] = STX;
 			if (str_to_send[0] != '\n') { // mencegah karakter newline untuk ditransmisikan
 				strcat(text, str_to_send);
-
-
 				counter++;
-
-				unsigned short ichks = calc_crc16(text, strlen(text));
+				
 				printf("byte ke-%d: '%s'\n", counter, text);
 				strcat(frame, text);
+				
+				unsigned short ichks = calc_crc16(frame, strlen(frame));
 				chks[0] = ichks & 0xff;
 				chks[1] = (ichks >> 8) & 0xff;
 				chks[2] = 0;
@@ -150,9 +139,11 @@ int main(int argc, char *argv[])
 	frame[0] = SOH;
 	frame[1] = (char) fnum;
 	frame[2] = STX;
-	unsigned short ichks = calc_crc16(text, strlen(text));
+	
 	printf("byte ke-%d: '%s'\n", counter, text);
-	strcat(frame, text);
+	strcat(frame, text);							
+	
+	unsigned short ichks = calc_crc16(frame, strlen(frame));
 	chks[0] = ichks & 0xff;
 	chks[1] = (ichks >> 8) & 0xff;
 	chks[2] = 0;
@@ -174,7 +165,7 @@ int main(int argc, char *argv[])
 			cnt++;
 		}
 		else {
-			printf("Waiting ACK\n");
+			//printf("Waiting ACK\n");
 			if (timer > 10) {
 				
 			}
@@ -183,10 +174,10 @@ int main(int argc, char *argv[])
 			
 		}
 	}
-
+/*
 	str_to_send[0] = Endfile;
 	sendto(socket_desc, str_to_send, strlen(str_to_send), 0, (struct sockaddr *)&server, sizeof(server));
-
+*/
 	isMainUp = 0;
 
 	printf("Reached end of file\n");
