@@ -58,12 +58,6 @@ char listframe[LISTSZ][1 + 1 + 1 + VARLEN + 1 + 2];
 bool listfbool[LISTSZ];
 int headWin = 1;
 
-
-int counter_win = 0;
-
-
-
-
 /* Delay to adjust speed of consuming buffer, in milliseconds */
 #define DELAY 600000
 
@@ -194,9 +188,7 @@ static Byte *rcvchar(int sockfd, QTYPE *queue)
 		sent_xonxoff = XOFF;
 		send_xon = false;
 		send_xoff = true;
-
 		x_msg[0] = sent_xonxoff;
-
 		// send 'sent_xonxoff' via socket
 		if (sendto(sockfd, x_msg, 1, 0, (struct sockaddr *)&sclient,sizeof(sclient)) > 0){
 			puts("Buffer > minimum upperlimit.\nMengirim XOFF.");
@@ -207,14 +199,12 @@ static Byte *rcvchar(int sockfd, QTYPE *queue)
 	}
 	*/
 	
-	
 	// read char from socket (receive)
 	if (recvfrom(sockfd, frame, RXQSIZE, 0, (struct sockaddr *)&sclient, &cli_len) < 0) {
 		puts("Receive byte failed");
 	} else {
 		printf("From transmitter: %s, framenum %d, checksum %c%c\n", frame, (int)frame[1], frame[getEtx(frame)+1], frame[getEtx(frame)+2]);
 		
-		/*
 		if (checkSum(frame) == true) {
 			printf("Checksum pass, file OK!\n");
 			sendENQ(frame[1],sockfd);
@@ -226,52 +216,6 @@ static Byte *rcvchar(int sockfd, QTYPE *queue)
 			printf("Checksum failed, file corrupted!\n");
 			sendNAK(frame[1],sockfd);
 		}
-		*/
-		
-		
-		// receive frame from transmitter
-		counter_win++;
-		if (counter_win >= WINSIZE) {
-			
-			if (counter_win == WINSIZE) {
-				
-				if (checkSum(frame) == true) {
-					printf("Checksum pass, file OK!\n");
-					int fnum = (int)frame[1];
-					strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
-					listfbool[fnum] = true;
-				}
-				else {
-					// receiver hopes that transmitter will send back this frame
-					printf("Checksum failed, file corrupted!\n");
-					sendNAK(frame[1],sockfd);
-				}
-				
-			}
-			
-			
-			// state OK, send ACK for the next frame
-			counter_win = 0;
-			sendENQ(frame[1]+1, sockfd);
-			
-		} else {
-			
-			// check checksum for every frame received
-			if (checkSum(frame) == true) {
-				printf("Checksum pass, file OK!\n");
-				int fnum = (int)frame[1];
-				strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
-				listfbool[fnum] = true;
-			}
-			else {
-				// receiver hopes that transmitter will send back this frame
-				printf("Checksum failed, file corrupted!\n");
-				sendNAK(frame[1],sockfd);
-			}
-			
-		}
-		
-		
 	}
 	// check end of file
 	if(frame[3] == Endfile) {
@@ -298,14 +242,12 @@ static Byte *q_get(QTYPE *queue, Byte *data)
 	Byte *current;
 	// Nothing in the queue 
 	if (!queue->count) return (NULL);
-
 	// send XON
 	if ((queue->count <= LOWERLIMIT) && (!send_xon)){
 		sent_xonxoff = XON;
 		send_xon = true;
 		send_xoff = false;
 		x_msg[0] = sent_xonxoff;
-
 		if (sendto(sockfd, x_msg, 1, 0, (struct sockaddr *)&sclient,sizeof(sclient)) > 0)
 			puts("Buffer < maximum lowerlimit.\nMengirim XON.");
 		else
@@ -313,12 +255,10 @@ static Byte *q_get(QTYPE *queue, Byte *data)
 	}
 	//select current data from buffer
 	current = &queue->data[queue->front];
-
 	//increment front index, check for wraparound, reduced buffer content size
 	queue->front += 1;
 	if (queue->front >= RXQSIZE) queue->front -= RXQSIZE;
 	queue->count -= 1;
-
 	return current;
 }
 */
