@@ -13,11 +13,16 @@
 #include "crc16.h"
 
 /** FRAME THING **/
+// Variable length of data inside frame
 #define VARLEN 16
 
 /** WINDOW THING **/
+//buffer list frame size
 #define LISTSZ 256
+
+//window size
 #define WINSIZE 5
+
 pthread_t ftimer[LISTSZ];
 
 char listframe[LISTSZ][1 + 1 + 1 + VARLEN + 1 + 2];
@@ -98,6 +103,8 @@ int main(int argc, char *argv[])
 	char text[VARLEN+1] = "";
 	char chks[3];
 	char etx[2]; etx[0] = ETX; etx[1] = 0;
+	
+	// create buffer list frame
 	while (fgets(str_to_send, msg_len, file) != NULL) {
 		if ((counter+1) % VARLEN == 0) {
 			frame[0] = SOH;
@@ -126,6 +133,7 @@ int main(int argc, char *argv[])
 				memset(str_to_send, 0, sizeof(str_to_send));
 
 			}
+			// resetting every char array
 			memset(text, 0, sizeof text);
 			memset(frame, 0, sizeof frame);
 			memset(chks, 0, sizeof chks);
@@ -138,7 +146,7 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
-	// mengirim endfile
+	// creating last frame
 	frame[0] = SOH;
 	frame[1] = (char) fnum;
 	frame[2] = STX;
@@ -158,6 +166,7 @@ int main(int argc, char *argv[])
 	strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
 	printf("Copied frame '%s'\n", listframe[fnum]);
 	
+	// sending frame with sliding window
 	long cnt = 1;
 	int timer = 1;
 	while (headWin < fnum) {
@@ -166,7 +175,7 @@ int main(int argc, char *argv[])
 			
 			pthread_create(&ftimer[cnt], NULL, TIMER_HANDLER, (void *)cnt);
 			usleep(2);
-			//sendto(socket_desc, listframe[cnt], strlen(listframe[cnt]), 0, (struct sockaddr *)&server, sizeof(server));
+			
 			cnt++;
 		}
 		else {
@@ -176,10 +185,7 @@ int main(int argc, char *argv[])
 						
 		}
 	}
-/*
-	str_to_send[0] = Endfile;
-	sendto(socket_desc, str_to_send, strlen(str_to_send), 0, (struct sockaddr *)&server, sizeof(server));
-*/
+	
 	isMainUp = 0;
 
 	printf("Reached end of file\n");
@@ -187,11 +193,7 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-
-/** THREAD
- * 	receives XON/XOFF
- */
- 
+// handles sending frame and its timeout
 void *TIMER_HANDLER(void *threadid) {
 	long tid;
 	tid = (long)threadid;
@@ -211,6 +213,7 @@ void *TIMER_HANDLER(void *threadid) {
 	pthread_exit(NULL);
 }
 
+// handles ACK and NAK receive
 void *XON_XOFF_HANDLER(void *args) {
 
 	int rf;
@@ -227,21 +230,18 @@ void *XON_XOFF_HANDLER(void *args) {
 		}
 		
 		int fidx = (int)frame[1];
-		if(frame[0] == NAK)
+		if(frame[0] == NAK) //get NAK
 		{
 			printf("NAK %d received\n", fidx);
 			printf("Resend frame '%s'\n", listframe[fidx]);
 			sendto(socket_desc, listframe[fidx], strlen(listframe[fidx]), 0, (struct sockaddr *)&server, sizeof(server));
 		}
-		else
+		else // get ACK
 		{
 			printf("ACK %d received\n", fidx);
 			listfbool[fidx] = true;
 			while(listfbool[headWin]) {
-				headWin++;
-				if (headWin >= LISTSZ) {
-					//do something
-				}
+				headWin++;			
 			}
 		}
 		
@@ -249,6 +249,6 @@ void *XON_XOFF_HANDLER(void *args) {
 		memset(frame, 0, sizeof(frame));
 	}
 
-	printf("Exit - XON/XOFF handler");
+	printf("Exit - ACK/NAK handler");
 	pthread_exit(0);
 }

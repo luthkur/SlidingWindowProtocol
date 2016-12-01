@@ -20,9 +20,11 @@
 #define LOWERLIMIT 3
 
 /** FRAME THING **/
+// Variable length of data inside frame
 #define VARLEN 16
 char frame[1 + 1 + 1 + VARLEN + 1 + 2] = "";
 
+// Get position of ETX char inside frame
 int getEtx (char* frame) {
 	int i = 3;
 	while ((frame[i] != ETX)&&(i < RXQSIZE)) {
@@ -31,6 +33,7 @@ int getEtx (char* frame) {
 	return i;
 }
 
+// Get whether the frame is corrupted or not using checksum
 bool checkSum (char* frame) {
 	char text[4 + VARLEN];
 	memset(text, 0, sizeof text);
@@ -51,7 +54,10 @@ bool checkSum (char* frame) {
 }
 
 /** WINDOW THING **/
+//buffer list frame size
 #define LISTSZ 256
+
+//window size
 #define WINSIZE 5
 
 char listframe[LISTSZ][1 + 1 + 1 + VARLEN + 1 + 2];
@@ -86,6 +92,7 @@ static Byte *rcvchar(int sockfd, QTYPE *queue);
 static Byte *q_get(QTYPE *, Byte *);
 static void *consume(void *param);
 
+// Send NAK to transmitter
 void sendNAK(int frameNum, int udpSocket) {
 	char frame[1 + 1 + 2] = "";
 	char chks[3];
@@ -100,6 +107,7 @@ void sendNAK(int frameNum, int udpSocket) {
 	sendto(udpSocket, frame, strlen(frame), 0, (struct sockaddr *)&sclient,sizeof(sclient));
 }
 
+// Send ACK to transmitter
 void sendENQ(int frameNum, int udpSocket) {
 	char frame[1 + 1 + 2] = "";
 	char chks[3];
@@ -183,23 +191,6 @@ static Byte *rcvchar(int sockfd, QTYPE *queue)
 	Read a character from socket and put it to the receive buffer. If the number of characters in the
 	* receive buffer is above certain level, then send XOFF and set a flag
 	*/
-	/*
-	if ((queue->count >= UPPERLIMIT)&&(!send_xoff)) { //buffer full
-		sent_xonxoff = XOFF;
-		send_xon = false;
-		send_xoff = true;
-
-		x_msg[0] = sent_xonxoff;
-
-		// send 'sent_xonxoff' via socket
-		if (sendto(sockfd, x_msg, 1, 0, (struct sockaddr *)&sclient,sizeof(sclient)) > 0){
-			puts("Buffer > minimum upperlimit.\nMengirim XOFF.");
-		}
-		else {
-			puts("XOFF gagal dikirim");
-		}
-	}
-	*/
 	
 	// read char from socket (receive)
 	if (recvfrom(sockfd, frame, RXQSIZE, 0, (struct sockaddr *)&sclient, &cli_len) < 0) {
@@ -238,41 +229,8 @@ static Byte *rcvchar(int sockfd, QTYPE *queue)
 	return queue->data;
 	}
 }
-/*
-static Byte *q_get(QTYPE *queue, Byte *data)
-{
-	Byte *current;
-	// Nothing in the queue 
-	if (!queue->count) return (NULL);
 
-	// send XON
-	if ((queue->count <= LOWERLIMIT) && (!send_xon)){
-		sent_xonxoff = XON;
-		send_xon = true;
-		send_xoff = false;
-		x_msg[0] = sent_xonxoff;
-
-		if (sendto(sockfd, x_msg, 1, 0, (struct sockaddr *)&sclient,sizeof(sclient)) > 0)
-			puts("Buffer < maximum lowerlimit.\nMengirim XON.");
-		else
-			puts("XON gagal dikirim");
-	}
-	//select current data from buffer
-	current = &queue->data[queue->front];
-
-	//increment front index, check for wraparound, reduced buffer content size
-	queue->front += 1;
-	if (queue->front >= RXQSIZE) queue->front -= RXQSIZE;
-	queue->count -= 1;
-
-	return current;
-}
-*/
 static void* consume(void *queue){
-
-//	QTYPE *rcvq_ptr = (QTYPE *)queue;
-
-//	int i=1; //consume counter
 	int offset = 0;
 	
 	while (true) {
@@ -284,28 +242,13 @@ static void* consume(void *queue){
 			}
 			printf("Mengkonsumsi frame ke-%d : '%s'\n", headWin + offset, text);
 			
-			listfbool[headWin] = false; // <-- consumed and reset
+			listfbool[headWin] = false; // marking the frame is consumed and reset
 			headWin++;
 			if (headWin >= LISTSZ) {
 				headWin = 1;
 				offset += LISTSZ-1;
 			}
 		}		
-		/*
-		Byte *res, *dummy;
-		res = q_get(rcvq_ptr, dummy);
-		if(res){
-			printf("Mengkonsumsi byte ke-%d : '%c'\n",i,*res);
-			i++;
-		}
-		if(rcvq_ptr->count == 0 && end)
-		{
-			childead = true;
-			pthread_exit(0);
-		}
-		
-		* */
-		//usleep(DELAY/100); //delay
 	}
 	pthread_exit(0);
 }
