@@ -1,3 +1,3 @@
 FlowMake : transmitter.cpp receiver.cpp
-	g++ -pthread -o receiver receiver.cpp
-	g++ -pthread -o transmitter transmitter.cpp
+	g++ -pthread -o r receiver.cpp
+	g++ -pthread -o t transmitter.cpp
