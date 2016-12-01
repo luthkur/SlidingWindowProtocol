@@ -189,6 +189,14 @@ int main(int argc, char *argv[])
 	isMainUp = 0;
 
 	printf("Reached end of file\n");
+	
+	for (int idx = 1; idx <= fnum; idx++) {
+		if (pthread_join(ftimer[idx], NULL) == -1)	{
+			perror("pthread_join");
+			return -1;
+		}
+	}
+	
 	printf("Bye\n");
 	return 0;
 }
