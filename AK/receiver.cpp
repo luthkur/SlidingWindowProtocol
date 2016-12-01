@@ -188,7 +188,9 @@ static Byte *rcvchar(int sockfd, QTYPE *queue)
 		sent_xonxoff = XOFF;
 		send_xon = false;
 		send_xoff = true;
+
 		x_msg[0] = sent_xonxoff;
+
 		// send 'sent_xonxoff' via socket
 		if (sendto(sockfd, x_msg, 1, 0, (struct sockaddr *)&sclient,sizeof(sclient)) > 0){
 			puts("Buffer > minimum upperlimit.\nMengirim XOFF.");
@@ -242,12 +244,14 @@ static Byte *q_get(QTYPE *queue, Byte *data)
 	Byte *current;
 	// Nothing in the queue 
 	if (!queue->count) return (NULL);
+
 	// send XON
 	if ((queue->count <= LOWERLIMIT) && (!send_xon)){
 		sent_xonxoff = XON;
 		send_xon = true;
 		send_xoff = false;
 		x_msg[0] = sent_xonxoff;
+
 		if (sendto(sockfd, x_msg, 1, 0, (struct sockaddr *)&sclient,sizeof(sclient)) > 0)
 			puts("Buffer < maximum lowerlimit.\nMengirim XON.");
 		else
@@ -255,10 +259,12 @@ static Byte *q_get(QTYPE *queue, Byte *data)
 	}
 	//select current data from buffer
 	current = &queue->data[queue->front];
+
 	//increment front index, check for wraparound, reduced buffer content size
 	queue->front += 1;
 	if (queue->front >= RXQSIZE) queue->front -= RXQSIZE;
 	queue->count -= 1;
+
 	return current;
 }
 */

@@ -12,8 +12,8 @@
 #include "dcomm.h"
 #include "crc16.h"
 
-/** TIMEOUT **/
-#define TIMEOUT 60 //in second
+/** TIMEOUT THING **/
+#define TIMEOUT 600000 //in second
 
 /** FRAME THING **/
 #define VARLEN 16
@@ -24,21 +24,11 @@
 
 
 /** THREAD **/
-/*
- * Ada 5 frame yg akan dikirim: f1, f2, f3, f4, f5
- * f1 dikirim dan membentuk thread utk menghitung timeout
- * f2 dikirim dan membentuk thread utk menghitung timeout
- * dst...
- * Ketika dapat ACK 1, thread 1 mati dan window maju 1 langkah
- * Ketika dapat ACK 2, thread 2 mati dan window maju 1 langkah
- * dst...
- * Ketika thread 2 menyatakan timeout, maka frame 2 akan dikirim ulang
- */ 
-
 pthread_t thframe[LISTSZ];
 pthread_t t_timer[LISTSZ]; // thread id for timer thread    
 
 
+/** WINDOW **/
 char listframe[LISTSZ][1 + 1 + 1 + VARLEN + 1 + 2];
 bool listfbool[LISTSZ];
 int headWin = 1;
@@ -157,7 +147,8 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
-	// mengirim endfile
+	
+	// mengirim end of file (EOF)
 	frame[0] = SOH;
 	frame[1] = (char) fnum;
 	frame[2] = STX;
@@ -175,7 +166,36 @@ int main(int argc, char *argv[])
 	printf("frame '%s'\n", frame);
 
 	strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
-	printf("Copied frame '%s'\n", listframe[fnum]);
+	printf("[Last frame] Copied frame '%s'\n", listframe[fnum]);
+	
+	// EOF belum ditambahkan?
+	/*
+	printf("CREATE EOF\n");
+	
+	memset(text, 0, sizeof text);
+	memset(frame, 0, sizeof frame);
+	memset(chks, 0, sizeof chks);
+	
+	fnum++;
+	
+	frame[0] = SOH;
+	frame[1] = (char) fnum;
+	frame[2] = STX;
+	frame[3] = Endfile;
+	
+	printf("Endfile %c %d\n", Endfile, int(Endfile));
+	
+	ichks = calc_crc16(frame, strlen(frame));
+	chks[0] = ichks & 0xff;
+	chks[1] = (ichks >> 8) & 0xff;
+	chks[2] = 0;
+	printf("checksum '%s' from '%d'\n", chks, ichks);
+	strcat(frame, etx);
+	strcat(frame, chks);
+					
+	strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
+	printf("[EOF] Copied frame '%s'\n", listframe[fnum]);
+	*/
 	
 	
 	
@@ -184,6 +204,11 @@ int main(int argc, char *argv[])
 	int timer = 1;
 	bool timeout;
 	while (headWin < fnum) {
+		
+		
+		printf("headWin inside MAIN %d\n", headWin);
+			
+		
 		if ((cnt < headWin + WINSIZE)&&(cnt <= fnum)) {
 
 			/*
@@ -199,19 +224,30 @@ int main(int argc, char *argv[])
 			}
 			*/
 			
+			
 			// create timeout_handler for thread frame cnt-1
 			if(pthread_create(&thframe[cnt], NULL, TIMEOUT_HANDLER, (void *) cnt) < 0) {
 				perror("Error: could not create thread");
 				return 1;
 			}
 			
+			
+			
+			if (cnt == fnum) {
+			
+				printf("Semua frame sudah terkirim.\n");
+				
+				break;
+			}
+			
+			
 			cnt++;
 			
 		}
 		else {
 			
-			printf("Waiting for ACK");
-			getchar();
+			printf("Waiting for ACK\n");
+			//getchar();
 			usleep(1);
 			
 		}
@@ -301,19 +337,23 @@ void *TIMEOUT_HANDLER(void *args) {
 	
     long int fidx = (long int) args;
 	
+	//pthread_mutex_lock(&lock);
+	
 	// assign timer thread untuk thread ke-fidx
     if (pthread_create(&t_timer[fidx], NULL, timer_thread, (void *) fidx) == -1) {
         perror("pthread_create");
         return NULL;
     }
     
-    printf("HELLO from thread %ld\n", fidx);
+    sendto(socket_desc, listframe[fidx], strlen(listframe[fidx]), 0, (struct sockaddr *)&server, sizeof(server));
 	
-	sendto(socket_desc, listframe[fidx], strlen(listframe[fidx]), 0, (struct sockaddr *)&server, sizeof(server));
-
+	//pthread_mutex_unlock(&lock);
+	
+	/*
     while (1) {
         sleep(2);
     }
+	*/
 	
 	
 }
@@ -360,6 +400,7 @@ void *XON_XOFF_HANDLER(void *args) {
 				
 				headWin++;
 				
+				printf("headWin inside thread %d\n", headWin);
 				
 				if (headWin >= LISTSZ) {
 					// do something
