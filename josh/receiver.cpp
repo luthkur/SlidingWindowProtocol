@@ -286,6 +286,7 @@ static void* consume(void *queue){
 				headWin = 1;
 				offset += LISTSZ-1;
 			}
+			usleep(100);
 		}
 	}
 	pthread_exit(0);

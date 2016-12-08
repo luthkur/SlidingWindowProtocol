@@ -171,6 +171,10 @@ int main(int argc, char *argv[])
 	int timer = 1;
 	while (headWin < fnum) {
 		if ((cnt < headWin + WINSIZE)&&(cnt <= fnum)) {
+			while (lastByteReceived == XOFF) {
+				//wait until xon
+			}
+			
 			printf("Send frame-%ld\n", cnt);
 			
 			pthread_create(&ftimer[cnt], NULL, TIMER_HANDLER, (void *)cnt);
@@ -209,6 +213,10 @@ void *TIMER_HANDLER(void *threadid) {
 	int i = 0;
 	while (!listfbool[tid]) {
 		
+		while (lastByteReceived == XOFF) {
+			// wait for XON
+		}
+		
 		if (i==0) {
 			printf("Sending! Thread ID, %ld\n", tid);
 		   
@@ -244,13 +252,23 @@ void *XON_XOFF_HANDLER(void *args) {
 			printf("Resend frame '%s'\n", listframe[fidx]);
 			sendto(socket_desc, listframe[fidx], strlen(listframe[fidx]), 0, (struct sockaddr *)&server, sizeof(server));
 		}
-		else // get ACK
+		else if(frame[0] == ENQ) // get ACK
 		{
 			printf("ACK %d received\n", fidx);
 			listfbool[fidx] = true;
 			while(listfbool[headWin]) {
-				headWin++;			
+				headWin++;
 			}
+		}
+		else if(frame[0] == XON) // get XON
+		{
+			printf("Get XON\n");
+			lastByteReceived = XON;
+		}
+		else if(frame[0] == XOFF) // get XOFF
+		{
+			printf("Get XOFF\n");
+			lastByteReceived = XOFF;
 		}
 		
 		// reset
