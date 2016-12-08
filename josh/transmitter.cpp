@@ -166,6 +166,7 @@ int main(int argc, char *argv[])
 	strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
 	printf("Copied frame '%s'\n", listframe[fnum]);
 	
+	
 	// sending frame with sliding window
 	long cnt = 1;
 	int timer = 1;
@@ -178,15 +179,14 @@ int main(int argc, char *argv[])
 			printf("Send frame-%ld\n", cnt);
 			
 			pthread_create(&ftimer[cnt], NULL, TIMER_HANDLER, (void *)cnt);
-			usleep(2);
+			usleep(100000);
 			
 			cnt++;
 		}
 		else {
 			//printf("Waiting ACK\n");
 			
-			usleep(5);
-						
+			usleep(200000);						
 		}
 	}
 	
@@ -222,7 +222,7 @@ void *TIMER_HANDLER(void *threadid) {
 		   
 			sendto(socket_desc, listframe[tid], strlen(listframe[tid]), 0, (struct sockaddr *)&server, sizeof(server));
 		}
-		usleep(10);
+		usleep(50);
 		i++;
 		i = i % 100000;
 	}
@@ -262,12 +262,12 @@ void *XON_XOFF_HANDLER(void *args) {
 		}
 		else if(frame[0] == XON) // get XON
 		{
-			printf("Get XON\n");
+			printf("XON received\n");
 			lastByteReceived = XON;
 		}
 		else if(frame[0] == XOFF) // get XOFF
 		{
-			printf("Get XOFF\n");
+			printf("XOFF received\n");
 			lastByteReceived = XOFF;
 		}
 		

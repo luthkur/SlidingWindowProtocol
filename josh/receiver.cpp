@@ -16,8 +16,8 @@
 
 /* Define receive buffer size */
 #define RXQSIZE 6 + VARLEN
-#define UPPERLIMIT 4
-#define LOWERLIMIT 2
+#define UPPERLIMIT 6
+#define LOWERLIMIT 3
 
 /** FRAME THING **/
 // Variable length of data inside frame
@@ -286,7 +286,7 @@ static void* consume(void *queue){
 				headWin = 1;
 				offset += LISTSZ-1;
 			}
-			usleep(100);
+			usleep(500000);
 		}
 	}
 	pthread_exit(0);
