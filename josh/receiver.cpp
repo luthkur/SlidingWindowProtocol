@@ -16,8 +16,8 @@
 
 /* Define receive buffer size */
 #define RXQSIZE 6 + VARLEN
-#define UPPERLIMIT 6
-#define LOWERLIMIT 3
+#define UPPERLIMIT 4
+#define LOWERLIMIT 2
 
 /** FRAME THING **/
 // Variable length of data inside frame
@@ -63,6 +63,7 @@ bool checkSum (char* frame) {
 char listframe[LISTSZ][1 + 1 + 1 + VARLEN + 1 + 2];
 bool listfbool[LISTSZ];
 int headWin = 1;
+int ucbuffersize = 0;
 
 /* Delay to adjust speed of consuming buffer, in milliseconds */
 #define DELAY 600000
@@ -84,12 +85,13 @@ char readbuf[80];
 struct sockaddr_in sserver, sclient;
 socklen_t cli_len = sizeof(sclient);
 
+
 /* Socket */
 int sockfd; // listen on sock_fd
 
 /* Functions declaration */
 static Byte *rcvchar(int sockfd, QTYPE *queue);
-static Byte *q_get(QTYPE *, Byte *);
+static void sendXON();
 static void *consume(void *param);
 
 // Send NAK to transmitter
@@ -176,7 +178,7 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
-		
+
 	}
 
 	if(pthread_join(consume_thread,NULL)){
@@ -191,19 +193,36 @@ static Byte *rcvchar(int sockfd, QTYPE *queue)
 	Read a character from socket and put it to the receive buffer. If the number of characters in the
 	* receive buffer is above certain level, then send XOFF and set a flag
 	*/
-	
+	if ((ucbuffersize >= UPPERLIMIT)&&(!send_xoff)) { //buffer full
+		sent_xonxoff = XOFF;
+		send_xon = false;
+		send_xoff = true;
+
+		x_msg[0] = sent_xonxoff;
+
+		// send 'sent_xonxoff' via socket
+		if (sendto(sockfd, x_msg, 1, 0, (struct sockaddr *)&sclient,sizeof(sclient)) > 0){
+			puts("Buffer > minimum upperlimit.\nMengirim XOFF.");
+		}
+		else {
+			puts("XOFF gagal dikirim");
+		}
+	}
+
 	// read char from socket (receive)
 	if (recvfrom(sockfd, frame, RXQSIZE, 0, (struct sockaddr *)&sclient, &cli_len) < 0) {
 		puts("Receive byte failed");
 	} else {
 		printf("From transmitter: %s, framenum %d, checksum %c%c\n", frame, (int)frame[1], frame[getEtx(frame)+1], frame[getEtx(frame)+2]);
-		
+
 		if (checkSum(frame) == true) {
 			printf("Checksum pass, file OK!\n");
 			sendENQ(frame[1],sockfd);
 			int fnum = (int)frame[1];
 			strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
 			listfbool[fnum] = true;
+			ucbuffersize++;
+			printf("ucbuffersize : %d\n", ucbuffersize);
 		}
 		else {
 			printf("Checksum failed, file corrupted!\n");
@@ -230,9 +249,25 @@ static Byte *rcvchar(int sockfd, QTYPE *queue)
 	}
 }
 
+static void sendXON(){
+	/** send XON **/
+	if ((ucbuffersize <= LOWERLIMIT) && (!send_xon)){
+		sent_xonxoff = XON;
+		send_xon = true;
+		send_xoff = false;
+		x_msg[0] = sent_xonxoff;
+
+		if (sendto(sockfd, x_msg, 1, 0, (struct sockaddr *)&sclient,sizeof(sclient)) > 0)
+			puts("Buffer < maximum lowerlimit.\nMengirim XON.");
+		else
+			puts("XON gagal dikirim");
+	}
+}
+
+
 static void* consume(void *queue){
 	int offset = 0;
-	
+
 	while (true) {
 		if (listfbool[headWin]) {
 			char text[VARLEN];
@@ -241,14 +276,17 @@ static void* consume(void *queue){
 				text[i-3] = listframe[headWin][i];
 			}
 			printf("Mengkonsumsi frame ke-%d : '%s'\n", headWin + offset, text);
-			
+
 			listfbool[headWin] = false; // marking the frame is consumed and reset
+			ucbuffersize--;
+			printf("ucbuffersize : %d\n", ucbuffersize);
+			sendXON();
 			headWin++;
 			if (headWin >= LISTSZ) {
 				headWin = 1;
 				offset += LISTSZ-1;
 			}
-		}		
+		}
 	}
 	pthread_exit(0);
 }
