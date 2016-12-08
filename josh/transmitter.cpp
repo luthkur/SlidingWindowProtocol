@@ -9,13 +9,17 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <pthread.h>
+
+// time
+#include <time.h>
+
 #include "dcomm.h"
 #include "crc16.h"
 
 /** FRAME THING **/
 // Variable length of data inside frame
 #define VARLEN 16
-
+#define RXQSIZE 6 + VARLEN
 /** WINDOW THING **/
 //buffer list frame size
 #define LISTSZ 256
@@ -42,6 +46,44 @@ using namespace std;
 void *TIMER_HANDLER(void *threadid);
 void *XON_XOFF_HANDLER(void *args);
 
+int getEtx (char* frame) {
+	int i = 3;
+	while ((frame[i] != ETX)&&(i < RXQSIZE)) {
+		i++;
+	}
+	return i;
+}
+
+// random Function
+void randFunc(char* rnd_chks) {
+
+	int rndNum0, rndNum1;
+
+	srand(time(NULL));
+
+	// generate random number between 1 and 10
+	rndNum0 = rand() % 10 + 1;
+	rndNum1 = rand() % 10 + 1;
+
+	rnd_chks[0] = (char)(rndNum0+65);
+	rnd_chks[1] = (char)(rndNum1+65);
+	rnd_chks[2] = '0';
+
+	printf("GENERATED RAND NUM 0: %d \n", rnd_chks[0]);
+	printf("GENERATED RAND NUM 1: %d \n", rnd_chks[1]);
+
+}
+
+int randCheck() {
+	int rndNum;
+
+	srand(time(NULL));
+
+	// generate random number between 1 and 20
+	rndNum = rand() % 20 + 1;
+
+	return rndNum;
+}
 
 /**
  * MAIN function
@@ -103,7 +145,7 @@ int main(int argc, char *argv[])
 	char text[VARLEN+1] = "";
 	char chks[3];
 	char etx[2]; etx[0] = ETX; etx[1] = 0;
-	
+
 	// create buffer list frame
 	while (fgets(str_to_send, msg_len, file) != NULL) {
 		if ((counter+1) % VARLEN == 0) {
@@ -113,14 +155,15 @@ int main(int argc, char *argv[])
 			if (str_to_send[0] != '\n') { // mencegah karakter newline untuk ditransmisikan
 				strcat(text, str_to_send);
 				counter++;
-				
+
 				printf("byte ke-%d: '%s'\n", counter, text);
 				strcat(frame, text);
-				
+
 				unsigned short ichks = calc_crc16(frame, strlen(frame));
 				chks[0] = ichks & 0xff;
 				chks[1] = (ichks >> 8) & 0xff;
 				chks[2] = 0;
+
 				printf("checksum '%s' from '%d'\n", chks, ichks);
 				strcat(frame, etx);
 				strcat(frame, chks);
@@ -150,10 +193,10 @@ int main(int argc, char *argv[])
 	frame[0] = SOH;
 	frame[1] = (char) fnum;
 	frame[2] = STX;
-	
+
 	printf("byte ke-%d: '%s'\n", counter, text);
-	strcat(frame, text);							
-	
+	strcat(frame, text);
+
 	unsigned short ichks = calc_crc16(frame, strlen(frame));
 	chks[0] = ichks & 0xff;
 	chks[1] = (ichks >> 8) & 0xff;
@@ -165,42 +208,41 @@ int main(int argc, char *argv[])
 
 	strncpy(listframe[fnum], frame, 1 + 1 + 1 + VARLEN + 1 + 2);
 	printf("Copied frame '%s'\n", listframe[fnum]);
-	
-	
+
 	// sending frame with sliding window
 	long cnt = 1;
 	int timer = 1;
-	while (headWin < fnum) {
+	while (headWin <= fnum) {
 		if ((cnt < headWin + WINSIZE)&&(cnt <= fnum)) {
 			while (lastByteReceived == XOFF) {
 				//wait until xon
 			}
-			
+
 			printf("Send frame-%ld\n", cnt);
-			
+
 			pthread_create(&ftimer[cnt], NULL, TIMER_HANDLER, (void *)cnt);
 			usleep(100000);
-			
+
 			cnt++;
 		}
 		else {
 			//printf("Waiting ACK\n");
-			
-			usleep(200000);						
+
+			usleep(200000);
 		}
 	}
-	
+
 	isMainUp = 0;
 
 	printf("Reached end of file\n");
-	
+
 	for (int idx = 1; idx <= fnum; idx++) {
 		if (pthread_join(ftimer[idx], NULL) == -1)	{
 			perror("pthread_join");
 			return -1;
 		}
 	}
-	
+
 	printf("Bye\n");
 	return 0;
 }
@@ -209,18 +251,29 @@ int main(int argc, char *argv[])
 void *TIMER_HANDLER(void *threadid) {
 	long tid;
 	tid = (long)threadid;
-	
+
 	int i = 0;
 	while (!listfbool[tid]) {
-		
+
 		while (lastByteReceived == XOFF) {
 			// wait for XON
 		}
-		
+
 		if (i==0) {
 			printf("Sending! Thread ID, %ld\n", tid);
-		   
-			sendto(socket_desc, listframe[tid], strlen(listframe[tid]), 0, (struct sockaddr *)&server, sizeof(server));
+
+			// NAK TESTING
+			char tmp_frame[1 + 1 + 1 + VARLEN + 1 + 2] ="";
+
+			strncpy(tmp_frame,listframe[tid], 1 + 1 + 1 + VARLEN + 1 + 2);
+
+			if (randCheck() <= 10) {
+				int indexetx = getEtx(tmp_frame);
+				// error in checksum
+				tmp_frame[indexetx+1] = 0;
+			}
+			// END OF NAK TESTING
+			sendto(socket_desc, tmp_frame, strlen(tmp_frame), 0, (struct sockaddr *)&server, sizeof(server));
 		}
 		usleep(50);
 		i++;
@@ -244,7 +297,7 @@ void *XON_XOFF_HANDLER(void *args) {
 			perror ("Error: failed receiving ACK/NAK from socket");
 			exit(1);
 		}
-		
+
 		int fidx = (int)frame[1];
 		if(frame[0] == NAK) //get NAK
 		{
@@ -270,7 +323,7 @@ void *XON_XOFF_HANDLER(void *args) {
 			printf("XOFF received\n");
 			lastByteReceived = XOFF;
 		}
-		
+
 		// reset
 		memset(frame, 0, sizeof(frame));
 	}
